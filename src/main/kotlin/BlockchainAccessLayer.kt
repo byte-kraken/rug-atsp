@@ -1,10 +1,15 @@
 import demostubs.BallotScanner
+import demostubs.MailService
 import demostubs.Registrar
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.util.*
 
-class BlockchainAccessLayer(private val ballotScanner: BallotScanner, private val registrar: Registrar) {
+class BlockchainAccessLayer(
+    private val ballotScanner: BallotScanner,
+    private val registrar: Registrar,
+    private val mailService: MailService
+) {
     private val blockchain = Blockchain()
     private val identityManager = IdentityManager()
     private val keyStore = KeyStore()
@@ -21,10 +26,10 @@ class BlockchainAccessLayer(private val ballotScanner: BallotScanner, private va
      * Secret is checked, credentials stored (ID manager), public-private keys created and stored (key storage), voterID created (UUID)
      * Voter receives their voterID and private key
      */
-    fun registerVoter(user: User): Pair<UUID, PrivateKey> {
-        if (!securityAdmin.checkSSN(user.ssn)) throw IllegalArgumentException()
+    fun registerVoter(username: String, password: String, ssn: Int): Pair<UUID, PrivateKey> {
+        if (!securityAdmin.checkSSN(ssn)) throw IllegalArgumentException()
         val uuid = generateUUID()
-        identityManager.store(uuid, user.username, sha(user.password))
+        identityManager.store(uuid, username, sha(password))
         val (publicKey, privateKey) = generateKeyPair()
         keyStore.store(uuid, publicKey, privateKey)
         return Pair(uuid, privateKey)
@@ -50,26 +55,27 @@ class BlockchainAccessLayer(private val ballotScanner: BallotScanner, private va
         return identityManager.check(uuid, username, sha(password))
     }
 
+
     /**
      * Implementation of Fig. 8 #1
      *
      * User requests and submits (absentee) ballot
      */
-    fun requestBallot(uuid: UUID, username: String, password: String, ballotID: Int): Ballot {
+    fun requestAbsenteeBallotForm(uuid: UUID, username: String, password: String, ballotID: Int): AbsenteeBallot {
         if (!identityManager.check(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
-        return ballotDB.getBallot(ballotID)
+        val ballotTemplate = ballotDB.getBallot(ballotID)
+        return AbsenteeBallot(ballotTemplate)
     }
 
     /**
      * Implementation of Fig. 8 #2
      */
-    fun submitBallot(uuid: UUID, username: String, password: String, ballot: Ballot) {
+    fun submitAbsenteeBallotRequest(uuid: UUID, username: String, password: String, absenteeBallot: AbsenteeBallot) {
         if (!identityManager.check(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
-        // TODO: Why is there a special database service for this? This is not used anywhere else?
-        if (!registeredVoterDatabase.checkExists(uuid, ballot.election))
+        if (!registeredVoterDatabase.checkExists(uuid, absenteeBallot.template.election))
             throw IllegalArgumentException("Voter is not registered")
 
-        blockchain.recordAbsenteeBallotIsOrdered(uuid, ballot)
+        blockchain.recordAbsenteeBallotIsOrdered(uuid, absenteeBallot)
         // TODO: Potentially extend to detect multiple votes
     }
 
@@ -91,7 +97,8 @@ class BlockchainAccessLayer(private val ballotScanner: BallotScanner, private va
             val token = tokenEngine.generateToken(uuid, auth, election.ID)
 
             val success = vault.storeToken(uuid, token, election)
-            // TODO: Inform user and registrar
+            registeredVoterDatabase.register(uuid, election)
+            registrar.notify(uuid, election, token.hash(), mailService)
         }.start()
         return true
     }
@@ -121,6 +128,30 @@ class BlockchainAccessLayer(private val ballotScanner: BallotScanner, private va
     fun createElection() {
         val election = registrar.createElection()
         ballotDB.storeElectionRecord(election)
+        registeredVoterDatabase.addElection(election)
         blockchain.recordElectionCreatedByRegistrar(election)
+    }
+
+    /**
+     * Implementation of Fig. 13
+     * Registrar creates ballot template
+     */
+    fun createBallotTemplate() {
+        val ballotTemplate = registrar.createBallotTemplate()
+        ballotDB.storeBallotTemplate(ballotTemplate)
+        blockchain.recordBallotTemplateCreatedByRegistrar(ballotTemplate)
+    }
+
+    /**
+     * Fetches all open elections a user can vote in.
+     *
+     * @param uuid: Some elections are only open to certain users (regional elections...)
+     */
+    fun getOpenElections(uuid: UUID): List<Election> {
+        return ballotDB.getOpenElections().filter { it.eligibleFunction?.let { func -> func(uuid) } ?: true }
+    }
+
+    fun getRegisteredElections(uuid: UUID): List<Election> {
+        return registeredVoterDatabase.getAllElectionsRegistered(uuid)
     }
 }

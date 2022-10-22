@@ -1,3 +1,4 @@
+import demostubs.MailObserver
 import demostubs.Registrar
 import java.io.File
 import java.security.MessageDigest
@@ -30,8 +31,6 @@ class IdentityManager(private val identities: MutableMap<UUID, Pair<String, Stri
     }
 }
 
-data class User(val username: String, val password: String, val ssn: Int)
-
 class SocialSecurityAdmin {
     fun checkSSN(ssn: Int): Boolean = true
 }
@@ -57,8 +56,9 @@ class TokenEngine() {
 }
 
 class Vault(private val tokens: MutableSet<VaultEntry> = mutableSetOf()) {
-    fun storeToken(uuid: UUID, token: Token, election: Election) {
+    fun storeToken(uuid: UUID, token: Token, election: Election): Boolean {
         tokens.add(VaultEntry(uuid, token, election))
+        return true
     }
 
     fun verifyToken(uuid: UUID, hashedToken: String): Boolean {
@@ -74,6 +74,12 @@ data class Token(val uuid: UUID, val auth: Authorization, val electionID: Int, v
     }
 }
 
+data class BallotTemplate(
+    val ID: Int,
+    val election: Election,
+    val candidates: List<Candidate>
+)
+
 data class Ballot(
     val ID: Int,
     val uuid: UUID,
@@ -84,6 +90,8 @@ data class Ballot(
     var vote: Candidate?
 )
 
+data class AbsenteeBallot(val template: BallotTemplate)
+
 data class Candidate(val id: String, val name: String)
 
 enum class BallotStatus {
@@ -91,7 +99,7 @@ enum class BallotStatus {
 }
 
 // TODO
-class BallotScan(val image: File) {
+class BallotScan(private val image: File) {
     fun hash(): String {
         return sha(image.toString())
     }
@@ -102,7 +110,15 @@ class BallotScan(val image: File) {
 }
 
 // TODO: Should probably also store the candidates
-data class Election(val ID: Int)
+data class Election(
+    val ID: Int,
+    val eligibleFunction: ((UUID) -> Boolean)?,
+    var status: ElectionStatus = ElectionStatus.Open
+)
+
+enum class ElectionStatus {
+    Open, Closed
+}
 
 class RegisteredVoterDatabase(private val registeredVoters: MutableMap<Election, MutableList<UUID>> = mutableMapOf()) {
     fun checkExists(uuid: UUID, election: Election): Boolean {
@@ -113,11 +129,30 @@ class RegisteredVoterDatabase(private val registeredVoters: MutableMap<Election,
         registeredVoters[election] = mutableListOf()
     }
 
-    fun addVoter(uuid: UUID, election: Election) {
-        registeredVoters[election]?.add(uuid) ?: run {
-            addElection(election)
-            registeredVoters[election]!!.add(uuid)
-        }
+    fun register(uuid: UUID, election: Election) {
+        registeredVoters[election]?.add(uuid) ?: throw IllegalArgumentException("Election is not registered.")
+    }
+
+    fun getAllElectionsRegistered(uuid: UUID): List<Election> {
+        return registeredVoters.filter { it.value.contains(uuid) }.keys.toList()
+    }
+}
+
+// TODO: Change templates for ballotID + lookup
+class PostBox(private val uuid: UUID, private val ballotID: Int) : MailObserver {
+    var ballot: Ballot? = null
+        private set
+
+    override fun getUUID(): UUID {
+        return uuid
+    }
+
+    override fun getBallotID(): Int {
+        return ballotID
+    }
+
+    override fun update(ballot: Ballot) {
+        this.ballot = ballot
     }
 }
 
