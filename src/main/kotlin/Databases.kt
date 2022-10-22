@@ -1,21 +1,20 @@
-class BlockchainAccessLayer {
-    lateinit var mobileCode: String
+import java.util.*
 
-    fun receiveInputFromMobile(mobileCode: String, ballotSelection:, electionID: String): VoteID {
-        this.mobileCode = mobileCode
+class Blockchain(private val nodes: MutableList<Node> = mutableListOf()) {
+    /*get() = nodes.toMutableList()*/
+
+    fun add(node: Node) {
+        nodes.add(node)
     }
 
-    fun receiveInputFromEOS(ballot: Ballot, electionID: String) {
-        this.mobileCode = mobileCode
+
+    fun register(uuid: UUID, election: Election) {
+        TODO("no clue how this is supposed to be stored?")
+    }
+
+    fun approve(uuid: UUID, election: Election, auth: Authorization) {
+        TODO("Not yet implemented")
     }
 }
 
-class FirstDatabase(ballotSelection: Ballot[], eSignatureBlockchainAccessLayer: BlockchainAccessLayerString)
-
-class SecondDatabase() {
-    lateinit var voteID: VoteID
-    lateinit var pointerBallotSelectionFirstDatabase: Ballot
-    lateinit var pointereSignatureFirstDatabase: BlockchainAccessLayerString
-}
-
-class BlockchainDatabase
+data class Node(val id: UUID, var content: Any)
