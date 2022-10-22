@@ -1,3 +1,6 @@
+import demostubs.Registrar
+import java.io.File
+import java.security.MessageDigest
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.SecureRandom
@@ -27,18 +30,10 @@ class IdentityManager(private val identities: MutableMap<UUID, Pair<String, Stri
     }
 }
 
-data class User(val ssn: Int, val username: String, val password: String)
+data class User(val username: String, val password: String, val ssn: Int)
 
 class SocialSecurityAdmin {
     fun checkSSN(ssn: Int): Boolean = true
-}
-
-class Registrar() {
-    fun verifyAndApproveRegistration(uuid: UUID, election: Election): Authorization? {
-        // simulates manual authorization check
-        if (true) return Authorization(this)
-        else return null
-    }
 }
 
 data class Authorization(val registrar: Registrar)
@@ -65,14 +60,48 @@ class Vault(private val tokens: MutableSet<VaultEntry> = mutableSetOf()) {
     fun storeToken(uuid: UUID, token: Token, election: Election) {
         tokens.add(VaultEntry(uuid, token, election))
     }
+
+    fun verifyToken(uuid: UUID, hashedToken: String): Boolean {
+        return tokens.any { it.uuid == uuid && it.token.hash() == hashedToken }
+    }
 }
 
 data class VaultEntry(val uuid: UUID, val token: Token, val election: Election)
 
-data class Token(val uuid: UUID, val auth: Authorization, val electionID: Int, val randomAlphanumericSequence: String)
+data class Token(val uuid: UUID, val auth: Authorization, val electionID: Int, val randomAlphanumericSequence: String) {
+    fun hash(): String {
+        return sha(this.toString())
+    }
+}
 
-data class Ballot(val ID: Int, val election: Election)
+data class Ballot(
+    val ID: Int,
+    val uuid: UUID,
+    val election: Election,
+    val hashedToken: String,
+    var status: BallotStatus = BallotStatus.Created,
+    val candidates: List<Candidate>,
+    var vote: Candidate?
+)
 
+data class Candidate(val id: String, val name: String)
+
+enum class BallotStatus {
+    Created, Delivered, Cast
+}
+
+// TODO
+class BallotScan(val image: File) {
+    fun hash(): String {
+        return sha(image.toString())
+    }
+
+    companion object {
+        fun dummy() = BallotScan(File(""))
+    }
+}
+
+// TODO: Should probably also store the candidates
 data class Election(val ID: Int)
 
 class RegisteredVoterDatabase(private val registeredVoters: MutableMap<Election, MutableList<UUID>> = mutableMapOf()) {
@@ -90,4 +119,12 @@ class RegisteredVoterDatabase(private val registeredVoters: MutableMap<Election,
             registeredVoters[election]!!.add(uuid)
         }
     }
+}
+
+/**
+ * Creates a SHA-256 encrypted hex string from password
+ */
+fun sha(password: String): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    return digest.digest().joinToString(separator = "") { "%02x".format(it) }
 }

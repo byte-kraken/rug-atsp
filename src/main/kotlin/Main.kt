@@ -1,13 +1,21 @@
-import java.security.MessageDigest
+import demostubs.ConsoleBallotScanner
+import demostubs.DemoRegistrar
 
-/**
- * Creates a SHA-256 encrypted hex string from password
- */
-fun sha(password: String): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    return digest.digest().joinToString(separator = "") { "%02x".format(it) }
+
+fun main() {
+    val bacLayer = BlockchainAccessLayer(ConsoleBallotScanner(), DemoRegistrar())
+    val username = "Demo"
+    val password = "hunter1"
+    val ssn = 123456789
+
+    val (uuid, privateKey) = bacLayer.registerVoter(User(username, password, ssn))
+
+    bacLayer.login(uuid, username, password)
+    println("Welcome! These are your available ballots, would you like to register to an election?")
+
+    val chosenBallot = 0
+
+    val ballot = bacLayer.requestBallot(uuid, username, password, chosenBallot)
+    bacLayer.scanBallot(ballot)
 }
-
-
-
 
