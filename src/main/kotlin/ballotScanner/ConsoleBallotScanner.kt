@@ -3,13 +3,19 @@ package ballotScanner
 import utils.Ballot
 import utils.BallotScan
 
+/**
+ * A simulated scanner in console.
+ */
 class ConsoleBallotScanner : BallotScanner {
     /**
-     * Fakes scanning a ballot by reading the console, updates the recorded information, returns a dummy image
+     * Fakes scanning a ballot by reading the console, updates the recorded information, returns a dummy image.
+     *
+     * @param ballot the ballot to scan
+     * @return a dummy image
      */
     override fun scan(ballot: Ballot): BallotScan {
         println("Which candidate would you like to choose?")
-        ballot.candidates.joinToString(separator = "\n - ", prefix = " - ") { "${it.name} (${it.id})" }
+        ballot.candidates.joinToString(separator = "\n - ", prefix = " - ") { it.id }
         val input = System.console().readLine()
 
         while (ballot.vote == null) {

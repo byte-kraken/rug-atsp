@@ -8,7 +8,10 @@ import utils.BallotScan
  */
 interface BallotScanner {
     /**
-     * Scans a ballot, updates the recorded information and returns the scan
+     * Scans a ballot, updates the recorded information and returns the scan.
+     *
+     * @param ballot the filled out ballot that is being scanned.
+     * @return the ballot scan as image
      */
     fun scan(ballot: Ballot): BallotScan
 }

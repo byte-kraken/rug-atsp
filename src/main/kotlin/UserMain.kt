@@ -3,18 +3,24 @@ import ballotScanner.ConsoleBallotScanner
 import observerPattern.PostBox
 import observerPattern.WormholeMailService
 import registrar.DemoRegistrar
+import registrar.DemoSocialSecurityAdministration
 import user.ConsoleUser
 import utils.Ballot
 
-val bacLayer = BlockchainAccessLayer(ConsoleBallotScanner(), DemoRegistrar(), WormholeMailService())
+val bacLayer = BlockchainAccessLayer(
+    ConsoleBallotScanner(),
+    DemoRegistrar(),
+    WormholeMailService(),
+    DemoSocialSecurityAdministration()
+)
 
 fun main() {
     val user = ConsoleUser()
     val ballotFiller = ConsoleAbsenteeBallotFiller()
     println("Creating a user account.")
-    val username = user.enterUsername() ?: "Demo"
-    val password = user.enterPassword() ?: "hunter1"
-    val ssn = user.enterSSN() ?: 123456789
+    val username = user.enterUsername()
+    val password = user.enterPassword()
+    val ssn = user.enterSSN()
 
     val (uuid, privateKey) = bacLayer.registerVoter(username, password, ssn)
     println("Registered User with UUID [$uuid] and private key [$privateKey]")
@@ -46,5 +52,6 @@ fun main() {
         ballot = postBox.ballot
     }
 
-    assert(bacLayer.scanBallot(ballot))
+    assert(bacLayer.scanBallotAndRegisterVote(ballot))
+    // original ballot must now be sent to government via mail service and can be checked there
 }
