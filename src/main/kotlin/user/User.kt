@@ -1,4 +1,4 @@
-package demostubs
+package user
 
 interface ApplicationUser {
     fun enterUsername(): String

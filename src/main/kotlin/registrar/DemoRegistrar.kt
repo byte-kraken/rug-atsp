@@ -1,8 +1,9 @@
-package demostubs
+package registrar
 
-import Authorization
-import BallotTemplate
-import Election
+import observerPattern.MailService
+import utils.Authorization
+import utils.BallotTemplate
+import utils.Election
 import java.util.*
 
 class DemoRegistrar : Registrar {

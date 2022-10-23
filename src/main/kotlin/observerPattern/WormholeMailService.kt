@@ -1,8 +1,8 @@
-package demostubs
+package observerPattern
 
-import Ballot
-import BallotStatus
-import BallotTemplate
+import utils.Ballot
+import utils.BallotStatus
+import utils.BallotTemplate
 import java.util.*
 
 class WormholeMailService(private val observers: MutableList<MailObserver> = mutableListOf()) : MailService {

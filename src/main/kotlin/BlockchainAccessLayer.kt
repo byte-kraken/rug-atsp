@@ -1,6 +1,7 @@
-import demostubs.BallotScanner
-import demostubs.MailService
-import demostubs.Registrar
+import ballotScanner.BallotScanner
+import observerPattern.MailService
+import registrar.Registrar
+import utils.*
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.util.*
@@ -15,7 +16,7 @@ class BlockchainAccessLayer(
     private val keyStore = KeyStore()
     private val securityAdmin = SocialSecurityAdmin()
     private val ballotDB = BallotDB()
-    private val registeredVoterDatabase = RegisteredVoterDatabase()
+    private val registeredVoterDB = RegisteredVoterDB()
     private val tokenEngine = TokenEngine()
     private val vault = Vault()
 
@@ -72,7 +73,7 @@ class BlockchainAccessLayer(
      */
     fun submitAbsenteeBallotRequest(uuid: UUID, username: String, password: String, absenteeBallot: AbsenteeBallot) {
         if (!identityManager.check(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
-        if (!registeredVoterDatabase.checkExists(uuid, absenteeBallot.template.election))
+        if (!registeredVoterDB.checkExists(uuid, absenteeBallot.template.election))
             throw IllegalArgumentException("Voter is not registered")
 
         blockchain.recordAbsenteeBallotIsOrdered(uuid, absenteeBallot)
@@ -97,7 +98,7 @@ class BlockchainAccessLayer(
             val token = tokenEngine.generateToken(uuid, auth, election.ID)
 
             val success = vault.storeToken(uuid, token, election)
-            registeredVoterDatabase.register(uuid, election)
+            registeredVoterDB.register(uuid, election)
             registrar.notify(uuid, election, token.hash(), mailService)
         }.start()
         return true
@@ -108,7 +109,7 @@ class BlockchainAccessLayer(
      * Scanning a ballot and voting
      */
     fun scanBallot(ballot: Ballot): Boolean {
-        if (ballot.status == BallotStatus.Cast) throw IllegalStateException("Ballot was already used")
+        if (ballot.status == BallotStatus.Cast) throw IllegalStateException("Utils.Ballot was already used")
 
         if (!vault.verifyToken(ballot.uuid, ballot.hashedToken)) throw IllegalArgumentException("Invalid ballot")
         ballot.status = BallotStatus.Delivered
@@ -121,6 +122,7 @@ class BlockchainAccessLayer(
         return true
     }
 
+    // TODO: Create RegistrarMain and make project thread-able
     /**
      * Implementation of Fig. 12
      * Registrar creates election template
@@ -128,7 +130,7 @@ class BlockchainAccessLayer(
     fun createElection() {
         val election = registrar.createElection()
         ballotDB.storeElectionRecord(election)
-        registeredVoterDatabase.addElection(election)
+        registeredVoterDB.addElection(election)
         blockchain.recordElectionCreatedByRegistrar(election)
     }
 
@@ -152,6 +154,6 @@ class BlockchainAccessLayer(
     }
 
     fun getRegisteredElections(uuid: UUID): List<Election> {
-        return registeredVoterDatabase.getAllElectionsRegistered(uuid)
+        return registeredVoterDB.getAllElectionsRegistered(uuid)
     }
 }

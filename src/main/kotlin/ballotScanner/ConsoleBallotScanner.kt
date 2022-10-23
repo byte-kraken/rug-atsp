@@ -1,7 +1,7 @@
-package demostubs
+package ballotScanner
 
-import Ballot
-import BallotScan
+import utils.Ballot
+import utils.BallotScan
 
 class ConsoleBallotScanner : BallotScanner {
     /**

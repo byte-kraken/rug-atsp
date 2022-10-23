@@ -1,3 +1,5 @@
+package utils
+
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.*
@@ -17,7 +19,7 @@ class Blockchain(private val transactions: MutableList<Transaction> = mutableLis
     }
 
     fun recordBallotFilledByVoter(filledBallot: Ballot, scan: BallotScan) {
-        // TODO: Vulnerability: Token and ID are stored at the same time, enabling matching:
+        // TODO: Vulnerability: utils.Token and ID are stored at the same time, enabling matching:
         transactions.apply {
             add(BallotUserTransaction(filledBallot.uuid, filledBallot.election, Timestamp.from(Instant.now())))
             add(BallotTokenTransaction(filledBallot.hashedToken, filledBallot.election, scan.hash(), scan))

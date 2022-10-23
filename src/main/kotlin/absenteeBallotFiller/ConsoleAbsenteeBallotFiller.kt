@@ -1,8 +1,8 @@
-package demostubs
+package absenteeBallotFiller
 
-import AbsenteeBallot
+import utils.AbsenteeBallot
 
-class ConsoleAbenteeBallotFiller : AbsenteeBallotFiller {
+class ConsoleAbsenteeBallotFiller : AbsenteeBallotFiller {
     override fun signForm(ballot: AbsenteeBallot) {
         print("\nPlease sign here: ")
         System.console().readLine()

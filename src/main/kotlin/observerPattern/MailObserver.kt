@@ -1,6 +1,6 @@
-package demostubs
+package observerPattern
 
-import Ballot
+import utils.Ballot
 import java.util.*
 
 interface MailObserver {

@@ -1,11 +1,16 @@
-import demostubs.*
+import absenteeBallotFiller.ConsoleAbsenteeBallotFiller
+import ballotScanner.ConsoleBallotScanner
+import observerPattern.PostBox
+import observerPattern.WormholeMailService
+import registrar.DemoRegistrar
+import user.ConsoleUser
+import utils.Ballot
 
 val bacLayer = BlockchainAccessLayer(ConsoleBallotScanner(), DemoRegistrar(), WormholeMailService())
 
-
 fun main() {
     val user = ConsoleUser()
-    val ballotFiller = ConsoleAbenteeBallotFiller()
+    val ballotFiller = ConsoleAbsenteeBallotFiller()
     println("Creating a user account.")
     val username = user.enterUsername() ?: "Demo"
     val password = user.enterPassword() ?: "hunter1"
@@ -24,8 +29,6 @@ fun main() {
 
     // In practice, there would be a pause here until the Registrar registers.
     println("Would you like to request an absentee ballot?")
-    user.enterYN()
-
     val registeredElections = bacLayer.getRegisteredElections(uuid)
     val chosenElectionToRequestBallot = user.chooseElection()
 
@@ -33,10 +36,9 @@ fun main() {
     ballotFiller.signForm(absenteeBallotForm)
     bacLayer.submitAbsenteeBallotRequest(uuid, username, password, absenteeBallotForm)
 
-    val mailService = WormholeMailService()
-
     // waiting for mail service to send ballot in mail
     val postBox = PostBox(uuid, absenteeBallotForm.template.ID)
+    val mailService = WormholeMailService()
     mailService.observe(postBox)
 
     var ballot: Ballot? = null

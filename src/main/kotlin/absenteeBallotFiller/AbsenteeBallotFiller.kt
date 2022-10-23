@@ -1,6 +1,6 @@
-package demostubs
+package absenteeBallotFiller
 
-import AbsenteeBallot
+import utils.AbsenteeBallot
 
 interface AbsenteeBallotFiller {
     fun signForm(ballot: AbsenteeBallot)
