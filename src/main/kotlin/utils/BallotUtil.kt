@@ -65,7 +65,7 @@ data class Candidate(val id: String)
  */
 class BallotScan(private val image: File) {
     /**
-     * Creates a hash representation of the image. -> TODO
+     * Creates a hash representation of the image.
      *
      * @return the image hash
      */

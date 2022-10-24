@@ -6,6 +6,10 @@ import java.util.*
 
 /**
  * An off-chain database for ballot templates, filled out ballots and elections.
+ *
+ * [NOTE] Ballot scans are also stored as hash on the blockchain (and can thus not be easily modified here).
+ *   While it might therforemake sense to not store the full image on a blockchain for cost reasons,
+ *   there is little reason to do the same for elections (thus creating two duplicate lists, both here and on-chain).
  */
 class BallotDB {
     private val ballotScans = mutableListOf<BallotScan>()
@@ -20,11 +24,12 @@ class BallotDB {
     fun storeElectionRecord(election: Election) = elections.add(election)
 
     /**
-     * Fetches the ballot with the given ID.
+     * Fetches a ballot template for the given election, if one exists.
      *
-     * @param id the ballot id
+     * @param election the election a ballot is needed for
+     * @return the ballot template if found, null otherwise
      */
-    fun getBallot(id: Int) = ballots[id]
+    fun getBallot(election: Election): BallotTemplate? = ballots.firstOrNull { it.election == election }
 
     /**
      * Stores a ballot template created by a registrar.
@@ -53,6 +58,7 @@ class BallotDB {
 
 /**
  * An off-chain database of all registered voters, operated by a registrar.
+ * [NOTE] The existence of this database is somewhat curious, since all items are duplicated to the blockchain.
  *
  * @property registeredVoters a map of elections and the users that are registered for them
  */
@@ -78,13 +84,13 @@ class RegisteredVoterDB(private val registeredVoters: MutableMap<Election, Mutab
     }
 
     /**
-     * Allows a user to register to an election (following approval of registrar)
+     * Allows a user to register to an election (following approval of registrar).
      *
      * @param uuid the user
      * @param election the election
      */
     fun register(uuid: UUID, election: Election) {
-        registeredVoters[election]?.add(uuid) ?: throw IllegalArgumentException("utils.Election is not registered.")
+        registeredVoters[election]?.add(uuid) ?: throw IllegalArgumentException("Election is not registered.")
     }
 
     /**

@@ -1,9 +1,9 @@
 package utils
 
 import registrar.Registrar
+import java.security.KeyPair
+import java.security.KeyPairGenerator
 import java.security.MessageDigest
-import java.security.PrivateKey
-import java.security.PublicKey
 import java.util.*
 
 /**
@@ -11,9 +11,37 @@ import java.util.*
  *
  * @property keys the keys of users
  */
-class KeyStore(private val keys: MutableMap<UUID, Pair<PublicKey, PrivateKey>> = mutableMapOf()) {
-    fun store(uuid: UUID, publicKey: PublicKey, privateKey: PrivateKey) {
-        keys[uuid] = Pair(publicKey, privateKey)
+class KeyStore(private val keys: MutableMap<UUID, KeyPair> = mutableMapOf()) {
+    fun store(uuid: UUID, keyPair: KeyPair) {
+        keys[uuid] = keyPair
+    }
+}
+
+/**
+ * A contract for a public-private-key generation service.
+ */
+interface KeyPairGenerationService {
+    /**
+     * Generates a public-private-key-pair.
+     *
+     * @return the generated pair
+     */
+    fun generateKeyPair(): KeyPair
+}
+
+/**
+ * A RSA key pair generator.
+ */
+class RSAKeyPairGenerator : KeyPairGenerationService {
+    /**
+     * Generates a RSA key-pair.
+     *
+     * @return the generated pair
+     */
+    override fun generateKeyPair(): KeyPair {
+        val kpg = KeyPairGenerator.getInstance("RSA")
+        kpg.initialize(2048)
+        return kpg.genKeyPair()
     }
 }
 
@@ -57,25 +85,6 @@ class IdentityManager(private val identities: MutableMap<UUID, Pair<String, Stri
  */
 data class Authorization(val registrar: Registrar)
 
-/**
- * An election that users can vote in. Can be set to only allow certain users to vote (e.g. a certain ZIP code).
- *
- * @property ID the unique id of the election
- * @property eligibleFunction determines who is allowed to vote (all if null)
- * @property status the current status of the election
- */
-data class Election(
-    val ID: Int,
-    val eligibleFunction: ((UUID) -> Boolean)?,
-    var status: ElectionStatus = ElectionStatus.Open
-)
-
-/**
- * The status of an election. Voting on closed elections should be prevented.
- */
-enum class ElectionStatus {
-    Open, Closed
-}
 
 /**
  * Creates a SHA-256 encrypted hex string from a string.

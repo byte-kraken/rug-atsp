@@ -5,53 +5,131 @@ import observerPattern.WormholeMailService
 import registrar.DemoRegistrar
 import registrar.DemoSocialSecurityAdministration
 import user.ConsoleUser
+import utils.AbsenteeBallotRequest
 import utils.Ballot
+import utils.RSAKeyPairGenerator
+import utils.Vault
+import java.util.*
+
+val mailService = WormholeMailService()
 
 val bacLayer = BlockchainAccessLayer(
     ConsoleBallotScanner(),
-    DemoRegistrar(),
-    WormholeMailService(),
-    DemoSocialSecurityAdministration()
+    DemoRegistrar(Vault()),
+    mailService,
+    DemoSocialSecurityAdministration(),
+    RSAKeyPairGenerator()
 )
+val user = ConsoleUser()
+val ballotFiller = ConsoleAbsenteeBallotFiller()
 
 fun main() {
-    val user = ConsoleUser()
-    val ballotFiller = ConsoleAbsenteeBallotFiller()
-    println("Creating a user account.")
+    DemoRegistrar.populateWithDummyElections(bacLayer)
+    DemoRegistrar.populateWithDummyBallots(bacLayer)
+
+    val (uuid, username, password) = createAndRegisterUser()
+    println("\nSuccessfully logged in. Welcome $username!")
+
+    registerForElection(uuid)
+
+    Thread.sleep(1000) // give registrar time to authorize us
+
+    val absenteeBallotForm = requestAbsenteeBallot(uuid, username, password)
+
+    val ballot = waitForBallot(uuid, absenteeBallotForm)
+
+    println("\n ### Voting ###")
+    bacLayer.scanBallotAndVote(ballot)
+
+    println("\n ### Sending paper ballot ###")
+    println("The original ballot must now be sent to the government via mail service and can be checked there.")
+
+    println("\n ### Inspecting blockchain contents ###")
+
+    bacLayer.getBlockchainContents().forEach {
+        println("# $it")
+    }
+}
+
+/**
+ * Busy waits for a ballot to arrive in the mail.
+ *
+ * @param uuid the user the ballot is for
+ * @param absenteeBallotForm the ballot type that is being waited on
+ * @return the arrived ballot
+ */
+fun waitForBallot(uuid: UUID, absenteeBallotForm: AbsenteeBallotRequest): Ballot {
+    println("\n ### Starring at Postbox ###")
+
+    val postBox = PostBox(uuid, absenteeBallotForm.template.ID)
+    mailService.observe(postBox)
+
+    var ballot: Ballot? = null
+
+    while (ballot == null) {
+        ballot = postBox.ballot
+        Thread.onSpinWait()
+    }
+
+    println("Received ballot!")
+    return ballot
+}
+
+
+/**
+ * Requests an absentee ballot for a user.
+ *
+ * @param uuid the user's id
+ * @param username the user's name
+ * @param password the user's password
+ * @return the completed absentee ballot request
+ */
+fun requestAbsenteeBallot(uuid: UUID, username: String, password: String): AbsenteeBallotRequest {
+    println("\n  ### Requesting an Absentee Ballot ###")
+
+    println("These are your registered elections. Would you like to request an absentee ballot for one of them?")
+    val registeredElections = bacLayer.getRegisteredElections(uuid)
+    val chosenElectionToRequestBallot = user.chooseElection(registeredElections)
+        ?: throw IllegalStateException("You are not registered to any elections right now.")
+
+    val absenteeBallotForm = bacLayer.requestAbsenteeBallotForm(uuid, username, password, chosenElectionToRequestBallot)
+    ballotFiller.signForm(absenteeBallotForm)
+    bacLayer.submitAbsenteeBallotRequest(uuid, username, password, absenteeBallotForm)
+    println("Absentee ballot requested, please check your mail for a ballot.")
+
+    return absenteeBallotForm
+}
+
+/**
+ * Registers for an open election.
+ *
+ * @param uuid the user trying to register
+ */
+fun registerForElection(uuid: UUID) {
+    println("\n  ### Registering for an election ###")
+    println("These are your available elections:")
+    val elections = bacLayer.getOpenElections(uuid)
+
+    val chosenElectionToRegisterTo = user.chooseElection(elections)
+        ?: throw IllegalStateException("There are no open elections available right now.")
+
+    bacLayer.registerForElection(uuid, chosenElectionToRegisterTo)
+    println("Registration request noted. A Registrar will verify it shortly!")
+}
+
+/**
+ * Creates a user account and registers it as a voter.
+ *
+ * @return the credentials created
+ */
+fun createAndRegisterUser(): Triple<UUID, String, String> {
+    println("\n  ### Creating a user account ###")
     val username = user.enterUsername()
     val password = user.enterPassword()
     val ssn = user.enterSSN()
 
     val (uuid, privateKey) = bacLayer.registerVoter(username, password, ssn)
-    println("Registered User with UUID [$uuid] and private key [$privateKey]")
+    println("Registered User [$username] with UUID [$uuid] and a RSA private key.")
 
-    bacLayer.login(uuid, username, password)
-
-    println("Welcome! These are your available elections.")
-    val elections = bacLayer.getOpenElections(uuid)
-
-    val chosenElectionToRegisterTo = user.chooseElection()
-    bacLayer.registerForElection(uuid, elections[chosenElectionToRegisterTo])
-
-    // In practice, there would be a pause here until the Registrar registers.
-    println("Would you like to request an absentee ballot?")
-    val registeredElections = bacLayer.getRegisteredElections(uuid)
-    val chosenElectionToRequestBallot = user.chooseElection()
-
-    val absenteeBallotForm = bacLayer.requestAbsenteeBallotForm(uuid, username, password, chosenElectionToRequestBallot)
-    ballotFiller.signForm(absenteeBallotForm)
-    bacLayer.submitAbsenteeBallotRequest(uuid, username, password, absenteeBallotForm)
-
-    // waiting for mail service to send ballot in mail
-    val postBox = PostBox(uuid, absenteeBallotForm.template.ID)
-    val mailService = WormholeMailService()
-    mailService.observe(postBox)
-
-    var ballot: Ballot? = null
-    while (ballot == null) {
-        ballot = postBox.ballot
-    }
-
-    assert(bacLayer.scanBallotAndRegisterVote(ballot))
-    // original ballot must now be sent to government via mail service and can be checked there
+    return Triple(uuid, username, password)
 }

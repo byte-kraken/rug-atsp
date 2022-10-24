@@ -1,5 +1,7 @@
 package user
 
+import utils.Election
+
 /**
  * Contracts functionality a voter using the Application needs to have.
  */
@@ -28,9 +30,10 @@ interface ApplicationUser {
     /**
      * If there are multiple elections the user could register to, they are asked to choose.
      *
-     * @return the ID of the chosen election
+     * @param possibleElections the election the user can choose from
+     * @return the chosen election
      */
-    fun chooseElection(): Int
+    fun chooseElection(possibleElections: List<Election>): Election?
 
     /**
      * Allows a user to agree or deny a prompt.

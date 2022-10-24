@@ -66,6 +66,22 @@ class Vault(private val tokens: MutableSet<VaultEntry> = mutableSetOf()) {
     fun verifyToken(uuid: UUID, hashedToken: String): Boolean {
         return tokens.any { it.uuid == uuid && it.token.hash() == hashedToken }
     }
+
+    /**
+     * Gets a ballot token for a user id and election from the vault.
+     *
+     * [NOTE] This is obviously a very sensible function, since it provides access to the secret token.
+     *   Naturally, the Registrar sending mail with the token must have access to it, however.
+     *   As such, despite the descriptions in the patent, the vault was changed to be a field of registrar,
+     *   giving the registrar control over its access.
+     *
+     * @param uuid the user id
+     * @param election the election
+     * @return the stored token for the combination of uuid and election
+     */
+    fun getToken(uuid: UUID, election: Election): Token {
+        return tokens.first { it.uuid == uuid && it.election == election }.token
+    }
 }
 
 /**

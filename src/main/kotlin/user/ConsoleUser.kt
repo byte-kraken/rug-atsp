@@ -1,21 +1,12 @@
 package user
 
+import utils.Election
 import java.util.*
 
 /**
  * A simulation of an application user using the console for communication.
  */
 class ConsoleUser : ApplicationUser {
-    /**
-     * Reads input from console.
-     *
-     * @param secret if true, the input will be read as password and thus not be shown when typing.
-     * @return the read input
-     */
-    private fun readInput(secret: Boolean = false): String {
-        if (secret) return System.console().readPassword().toString()
-        return System.console().readLine()
-    }
 
     /**
      * Allows the user to enter their username.
@@ -23,8 +14,8 @@ class ConsoleUser : ApplicationUser {
      * @return the read input
      */
     override fun enterUsername(): String {
-        print("\nPlease enter your desired username: ")
-        return readInput()
+        print("Please enter your desired username: ")
+        return readLine() ?: "Rick"
     }
 
     /**
@@ -33,8 +24,8 @@ class ConsoleUser : ApplicationUser {
      * @return the read input
      */
     override fun enterPassword(): String {
-        print("\nPlease enter your desired password: ")
-        return readInput(true)
+        print("Please enter your desired password: ")
+        return readLine() ?: "hunter3"
     }
 
     /**
@@ -43,8 +34,8 @@ class ConsoleUser : ApplicationUser {
      * @return the read input, parsed as integer
      */
     override fun enterSSN(): Int {
-        print("\nPlease enter your Social Security Number: ")
-        return Integer.parseInt(readInput(true))
+        print("Please enter your Social Security Number: ")
+        return getValidNumber(errorMessage = "Please enter numbers only!")
     }
 
     /**
@@ -52,9 +43,14 @@ class ConsoleUser : ApplicationUser {
      *
      * @return the read input, parsed as integer
      */
-    override fun chooseElection(): Int {
-        print("\nPlease pick an election to register to: ")
-        return Integer.parseInt(readInput(true))
+    override fun chooseElection(possibleElections: List<Election>): Election? {
+        if (possibleElections.isEmpty()) return null
+        //if(possibleElections.size == 1) return possibleElections[0]
+
+        println("Please pick an election: ")
+        possibleElections.forEachIndexed { idx, str -> println("[$idx] ${str.name}") }
+
+        return possibleElections[getValidNumber(possibleElections.size, "Illegal choice, pick one of the IDs!")]
     }
 
     /**
@@ -63,8 +59,35 @@ class ConsoleUser : ApplicationUser {
      * @return the chosen option
      */
     override fun enterYN(): Boolean {
-        print("\nEnter Y for yes, N for no (default: Y): ")
-        val input = readInput()
-        return input.uppercase(Locale.getDefault())[0] != 'N'
+        print("Enter Y for yes, N for no (default: Y): ")
+        val input = readLine()
+        return input?.uppercase(Locale.getDefault())?.get(0) != 'N'
+    }
+
+    companion object {
+        /**
+         * Reads input from console until a valid number is given.
+         *
+         * @param upperBound the upper bound of the number (lower bound = 0)
+         * @param errorMessage the error message displayed on failure
+         * @return the valid number
+         */
+        fun getValidNumber(
+            upperBound: Int = Integer.MAX_VALUE,
+            errorMessage: String = "Illegal choice, try again!",
+        ): Int {
+            return try {
+                var choice = Integer.parseInt(readLine() ?: "0")
+
+                while (choice >= upperBound || choice < 0) {
+                    println(errorMessage)
+                    choice = Integer.parseInt(readLine() ?: "0")
+                }
+                choice
+            } catch (ex: NumberFormatException) {
+                println(errorMessage)
+                getValidNumber(upperBound, errorMessage)
+            }
+        }
     }
 }

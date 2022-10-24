@@ -3,8 +3,8 @@ import observerPattern.MailService
 import registrar.Registrar
 import registrar.SocialSecurityAdministration
 import utils.*
+import java.security.KeyPair
 import java.security.PrivateKey
-import java.security.PublicKey
 import java.util.*
 
 /**
@@ -20,7 +20,8 @@ class BlockchainAccessLayer(
     private val ballotScanner: BallotScanner,
     private val registrar: Registrar,
     private val mailService: MailService,
-    private val securityAdmin: SocialSecurityAdministration
+    private val securityAdmin: SocialSecurityAdministration,
+    private val keyPairGenerationService: KeyPairGenerationService
 ) {
     private val blockchain = Blockchain()
     private val identityManager = IdentityManager()
@@ -28,7 +29,6 @@ class BlockchainAccessLayer(
     private val ballotDB = BallotDB()
     private val registeredVoterDB = RegisteredVoterDB()
     private val tokenEngine = TokenEngine()
-    private val vault = Vault()
 
     /**
      * When a voter first uses the election system, they need to register using a government issued secret (e.g. ssn).
@@ -49,34 +49,45 @@ class BlockchainAccessLayer(
         if (!securityAdmin.checkSSN(ssn)) throw IllegalArgumentException()
         val uuid = generateUUID()
         identityManager.store(uuid, username, sha(password))
-        val (publicKey, privateKey) = generateKeyPair()
-        keyStore.store(uuid, publicKey, privateKey)
-        return Pair(uuid, privateKey)
+        val keyPair = generateKeyPair()
+        keyStore.store(uuid, keyPair)
+        return Pair(uuid, keyPair.private)
     }
 
     /**
      * Generates a public-private key pair.
      *
+     * [NOTE] While the patent mentions that the private key is used to "encrypt" the blockchain, there is no real
+     *   explanation given and how this would be done. As such, the key pair is fairly useless in this implementation.
+     *   Presumably, the blockchain should authenticate users when they perform writing requests that way.
+     *
      * @return the created pair
      */
-    private fun generateKeyPair(): Pair<PublicKey, PrivateKey> {
-        // e.g. RSA key generation
-        TODO("Not yet implemented")
+    private fun generateKeyPair(): KeyPair {
+        return keyPairGenerationService.generateKeyPair()
     }
 
+    private val createdUUIDs: MutableList<UUID> = mutableListOf()
+
     /**
-     * Generates unique user identifier.
+     * Generates a unique user identifier.
      *
      * @return the created uuid
      */
     private fun generateUUID(): UUID {
-        // TODO: sensible UUID creation
-        return UUID.randomUUID()
+        var uuid = UUID.randomUUID()
+        while (createdUUIDs.contains(uuid)) {
+            uuid = UUID.randomUUID()
+        }
+        return uuid
     }
 
     /**
      * Performs a login for a registered user by checking their credentials.
-     * TODO: Salting
+     *
+     * [NOTE] The patent does not go into detail how a login should be performed on a technical level.
+     *   It also does not state why the UUID is needed.
+     *   As such, normal security measures such as password hash salting have been omitted.
      *
      * @param uuid the user id
      * @param username the username
@@ -96,8 +107,7 @@ class BlockchainAccessLayer(
      * @param uuid the user id of the requester
      * @param username the username used for authentication
      * @param password the password used for authentication
-     * @param ballotID the ballot a form is requested for
-     *
+     * @param election the election a form is requested for
      *
      * @see <a href="https://patentimages.storage.googleapis.com/6d/10/99/b105d2e83fd74b/US20200258338A1-20200813-D00014.png">
      *     First part of implementation of Fig 8 of patent </a>
@@ -106,10 +116,11 @@ class BlockchainAccessLayer(
         uuid: UUID,
         username: String,
         password: String,
-        ballotID: Int
+        election: Election
     ): AbsenteeBallotRequest {
-        if (!identityManager.check(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
-        val ballotTemplate = ballotDB.getBallot(ballotID)
+        if (!login(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
+        val ballotTemplate = ballotDB.getBallot(election)
+            ?: throw IllegalStateException("Ballot Template has not yet been created")
         return AbsenteeBallotRequest(ballotTemplate)
     }
 
@@ -130,12 +141,14 @@ class BlockchainAccessLayer(
         password: String,
         absenteeBallotRequest: AbsenteeBallotRequest
     ) {
-        if (!identityManager.check(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
+        if (!login(uuid, username, password)) throw IllegalArgumentException("Wrong credentials")
         if (!registeredVoterDB.checkExists(uuid, absenteeBallotRequest.template.election))
             throw IllegalArgumentException("Voter is not registered")
 
         blockchain.recordAbsenteeBallotIsOrdered(uuid, absenteeBallotRequest)
-        // TODO: Potentially extend to detect multiple votes
+        // [NOTE] Patent mentions optionally extending this method to detect multiple requests
+
+        registrar.instructToSendBallot(uuid, absenteeBallotRequest.template.election, mailService)
     }
 
     /**
@@ -152,7 +165,7 @@ class BlockchainAccessLayer(
      */
     fun registerForElection(uuid: UUID, election: Election): Boolean {
         blockchain.recordVoterRegistersForElection(uuid, election)
-        // TODO: optionally: register to USPS as well
+        // [NOTE] optionally from patent: register to USPS as well
 
         // asynchronous waiting for registrar
         Thread {
@@ -161,10 +174,8 @@ class BlockchainAccessLayer(
             blockchain.recordRegistrarApprovesRegistrationToElection(uuid, election, auth)
 
             val token = tokenEngine.generateToken(uuid, auth, election.ID)
-
-            val success = vault.storeToken(uuid, token, election)
+            registrar.storeToken(uuid, election, token)
             registeredVoterDB.register(uuid, election)
-            registrar.instructToSendBallot(uuid, election, token.hash(), mailService)
         }.start()
         return true
     }
@@ -180,10 +191,10 @@ class BlockchainAccessLayer(
      *     <a href="https://patentimages.storage.googleapis.com/d5/9b/1e/da99bb6172e3af/US20200258338A1-20200813-D00020.png">
      *     Implementation of Fig 11 of patent #2 </a>
      */
-    fun scanBallotAndRegisterVote(ballot: Ballot): Boolean {
+    fun scanBallotAndVote(ballot: Ballot): Boolean {
         if (ballot.status == BallotStatus.Cast) throw IllegalStateException("Ballot was already used")
 
-        if (!vault.verifyToken(ballot.uuid, ballot.hashedToken)) throw IllegalArgumentException("Invalid ballot")
+        if (!registrar.verifyToken(ballot.uuid, ballot.hashedToken)) throw IllegalArgumentException("Invalid ballot")
         ballot.status = BallotStatus.Delivered
 
         val scannedBallot = ballotScanner.scan(ballot)
@@ -193,15 +204,14 @@ class BlockchainAccessLayer(
         return true
     }
 
-    // TODO: Create RegistrarMain and make project thread-able?
     /**
      * Creates an election via a registrar.
      *
      * @see <a href="https://patentimages.storage.googleapis.com/60/bd/a5/d6f15d2c99b429/US20200258338A1-20200813-D00021.png">
      *     Implementation of Fig 12 of patent </a>
      */
-    fun createElection() {
-        val election = registrar.createElection()
+    fun createElection(election: Election) {
+        registrar.createElection(election)
         ballotDB.storeElectionRecord(election)
         registeredVoterDB.addElection(election)
         blockchain.recordElectionCreatedByRegistrar(election)
@@ -213,8 +223,8 @@ class BlockchainAccessLayer(
      * @see <a href="https://patentimages.storage.googleapis.com/60/bd/a5/d6f15d2c99b429/US20200258338A1-20200813-D00022.png">
      *     Implementation of Fig 13 of patent </a>
      */
-    fun createBallotTemplate() {
-        val ballotTemplate = registrar.createBallotTemplate()
+    fun createBallotTemplate(ballotTemplate: BallotTemplate) {
+        registrar.createBallotTemplate(ballotTemplate)
         ballotDB.storeBallotTemplate(ballotTemplate)
         blockchain.recordBallotTemplateCreatedByRegistrar(ballotTemplate)
     }
@@ -235,7 +245,12 @@ class BlockchainAccessLayer(
      * @param uuid the user's id
      * @return a list of elections
      */
-    fun getRegisteredElections(uuid: UUID): List<Election> {
-        return registeredVoterDB.getAllElectionsRegistered(uuid)
-    }
+    fun getRegisteredElections(uuid: UUID): List<Election> = registeredVoterDB.getAllElectionsRegistered(uuid)
+
+    /**
+     * Fetches all blockchain contents.
+     *
+     * @return a list with the blockchain transactions
+     */
+    fun getBlockchainContents(): List<Transaction> = blockchain.getTransactions()
 }

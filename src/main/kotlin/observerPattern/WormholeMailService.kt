@@ -3,6 +3,7 @@ package observerPattern
 import utils.Ballot
 import utils.BallotStatus
 import utils.BallotTemplate
+import utils.Token
 import java.util.*
 
 /**
@@ -25,16 +26,16 @@ class WormholeMailService(private val observers: MutableList<MailObserver> = mut
      *
      * @param uuid the user id the mail is addressed to must match the mail
      * @param ballotTemplate the ballot the mail is concerned with must match the mail
-     * @param hashedToken the secret token string generated for each ballot sent
+     * @param token the secret token string generated for each ballot sent
      */
-    override fun sendMail(uuid: UUID, ballotTemplate: BallotTemplate, hashedToken: String) {
+    override fun sendMail(uuid: UUID, ballotTemplate: BallotTemplate, token: Token) {
         observers.filter { uuid == it.getUUID() && ballotTemplate.ID == it.getBallotID() }.forEach {
             it.update(
                 Ballot(
                     ballotTemplate.ID,
                     uuid,
                     ballotTemplate.election,
-                    hashedToken,
+                    token.hash(),
                     BallotStatus.Created,
                     ballotTemplate.candidates,
                     null

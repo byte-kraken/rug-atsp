@@ -1,15 +1,14 @@
 package registrar
 
+import BlockchainAccessLayer
 import observerPattern.MailService
-import utils.Authorization
-import utils.BallotTemplate
-import utils.Election
+import utils.*
 import java.util.*
 
 /**
  * A demo implementation of a Registrar that lacks critical analysis skill and blankly accepts all authorization request.
  */
-class DemoRegistrar : Registrar {
+class DemoRegistrar(private val vault: Vault) : Registrar {
     private val elections = mutableListOf<Election>()
     private val ballotTemplates = mutableListOf<BallotTemplate>()
 
@@ -32,8 +31,8 @@ class DemoRegistrar : Registrar {
      *
      * @return the election created
      */
-    override fun createElection(): Election {
-        return Election(elections.size, null).also { elections.add(it) }
+    override fun createElection(election: Election): Boolean {
+        return elections.add(election)
     }
 
     /**
@@ -42,8 +41,30 @@ class DemoRegistrar : Registrar {
      *
      * @return the ballot template created
      */
-    override fun createBallotTemplate(): BallotTemplate {
-        return BallotTemplate(ballotTemplates.size, elections.last(), listOf()).also { ballotTemplates.add(it) }
+    override fun createBallotTemplate(ballotTemplate: BallotTemplate): Boolean {
+        return ballotTemplates.add(ballotTemplate)
+    }
+
+    /**
+     * Stores a token in its vault.
+     *
+     * @param uuid the user id the token should be stored to
+     * @param token the token that should be stored
+     * @param election the election the token should be stored to
+     */
+    override fun storeToken(uuid: UUID, election: Election, token: Token) {
+        vault.storeToken(uuid, token, election)
+    }
+
+    /**
+     * Verifies that the given token exists for the given user.
+     *
+     * @param uuid the user that should have the token
+     * @param hashedToken a hash of the token the user should have
+     * @return true if the token exists, false otherwise
+     */
+    override fun verifyToken(uuid: UUID, hashedToken: String): Boolean {
+        return vault.verifyToken(uuid, hashedToken)
     }
 
     /**
@@ -52,11 +73,63 @@ class DemoRegistrar : Registrar {
      *
      * @param uuid the user that has been registered
      * @param election the election they have registered to
-     * @param tokenHash the voter's unique ballot token (needed to send them the ballot)
      * @param mailService the mailservice the ballot should be sent with
      */
-    override fun instructToSendBallot(uuid: UUID, election: Election, tokenHash: String, mailService: MailService) {
+    override fun instructToSendBallot(uuid: UUID, election: Election, mailService: MailService) {
         val ballotTemplate = ballotTemplates.first { it.election == election }
-        mailService.sendMail(uuid, ballotTemplate, tokenHash)
+        Thread {
+            println("[Registrar] Sending ballot in wormhole mail, expected delivery in 1 second!")
+            Thread.sleep(1000)
+            mailService.sendMail(uuid, ballotTemplate, vault.getToken(uuid, election))
+        }.start()
+    }
+
+    companion object {
+        private val dummyElection0 = Election(ID = 0, eligibleFunction = null, name = "British Prime Minister Vote")
+        private val dummyElection1 = Election(
+            ID = 1,
+            eligibleFunction = { u -> (u.leastSignificantBits.toInt() % 2 == 0) },
+            name = "Should users with UUIDs % 2 == 0 be allowed to vote?"
+        ) // only allows half of all users to vote
+        private val dummyElection2 =
+            Election(ID = 2, eligibleFunction = null, name = "Should the USPS deliver all NFTs?")
+
+        /**
+         * Populates a blockchain with dummy elections.
+         *
+         * @param blockchainAccessLayer the bcAccLayer the elections should be created at
+         */
+        fun populateWithDummyElections(blockchainAccessLayer: BlockchainAccessLayer) {
+            with(blockchainAccessLayer) {
+                createElection(dummyElection0)
+                createElection(dummyElection1)
+                createElection(dummyElection2)
+            }
+        }
+
+        /**
+         * Populates a blockchain with dummy ballot templates.
+         *
+         * @param blockchainAccessLayer the bcAccLayer the ballot templates should be created at
+         */
+        fun populateWithDummyBallots(blockchainAccessLayer: BlockchainAccessLayer) {
+            with(blockchainAccessLayer) {
+                createBallotTemplate(
+                    BallotTemplate(
+                        0, dummyElection0, listOf(Candidate("Liz Truss"), Candidate("Cabbage McCabbageFace"))
+                    )
+                )
+                blockchainAccessLayer.createBallotTemplate(
+                    BallotTemplate(
+                        1, dummyElection1, listOf(Candidate("Yes"), Candidate("No"))
+                    )
+                )
+                createBallotTemplate(
+                    BallotTemplate(
+                        2, dummyElection2, listOf(Candidate("Yes"), Candidate("Yes!"))
+                    )
+                )
+            }
+        }
     }
 }

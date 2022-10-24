@@ -47,8 +47,8 @@ class Blockchain(private val transactions: MutableList<Transaction> = mutableLis
      * One showing the that the user id filled out a ballot for this election.
      * And one showing that someone filled out a ballot and voted in a certain way.
      *
-     * TODO: Note: The patent is vulnerable to a timing attack here.
-     *  Token and ID are stored at the same time, enabling matching
+     * [NOTE] The patent is vulnerable to a timing attack here.
+     *  Token and ID are stored at the same time, enabling matching.
      *
      * @param filledBallot the vote cast
      * @param scan a scan of the vote cast
@@ -77,6 +77,13 @@ class Blockchain(private val transactions: MutableList<Transaction> = mutableLis
     fun recordBallotTemplateCreatedByRegistrar(ballotTemplate: BallotTemplate) {
         transactions.add(BallotTemplateCreationTransaction(ballotTemplate))
     }
+
+    /**
+     * Fetches a copy of all transactions.
+     */
+    fun getTransactions(): List<Transaction> {
+        return transactions.toList()
+    }
 }
 
 /**
@@ -90,7 +97,7 @@ abstract class Transaction
  * @property uuid the user registering
  * @property election the election registered to
  */
-class RegisterElectionTransaction(val uuid: UUID, val election: Election) : Transaction()
+data class RegisterElectionTransaction(val uuid: UUID, val election: Election) : Transaction()
 
 /**
  * A transaction showing that an absentee ballot was ordered.
@@ -98,7 +105,7 @@ class RegisterElectionTransaction(val uuid: UUID, val election: Election) : Tran
  * @property uuid the user ordering the ballot
  * @property ballot the ballot requested
  */
-class AbsenteeBallotOrderTransaction(val uuid: UUID, val ballot: AbsenteeBallotRequest) : Transaction()
+data class AbsenteeBallotOrderTransaction(val uuid: UUID, val ballot: AbsenteeBallotRequest) : Transaction()
 
 /**
  * A transaction showing that a registration to an election was authorized.
@@ -107,7 +114,8 @@ class AbsenteeBallotOrderTransaction(val uuid: UUID, val ballot: AbsenteeBallotR
  * @property election the election they are registering to
  * @property auth the authentication given
  */
-class AuthorizeRegistrationTransaction(val uuid: UUID, val election: Election, val auth: Authorization) : Transaction()
+data class AuthorizeRegistrationTransaction(val uuid: UUID, val election: Election, val auth: Authorization) :
+    Transaction()
 
 /**
  * A transaction showing that a user submitted a ballot.
@@ -116,7 +124,7 @@ class AuthorizeRegistrationTransaction(val uuid: UUID, val election: Election, v
  * @property election the election they voted in
  * @property timestamp the time of voting
  */
-class BallotUserTransaction(
+data class BallotUserTransaction(
     val uuid: UUID, val election: Election, val timestamp: Timestamp = Timestamp.from(Instant.now())
 ) : Transaction()
 
@@ -129,11 +137,11 @@ class BallotUserTransaction(
  * @property scanRef the reference to a scan of the ballot stored off-chain
  * @property timestamp the time of voting
  */
-class BallotTokenTransaction(
+data class BallotTokenTransaction(
     val token: String,
     val election: Election,
     val scanHash: String,
-    val scanRef: BallotScan, // TODO: should actually be reference to BallotDatabase
+    val scanRef: BallotScan, // should actually be reference to BallotDatabase
     val timestamp: Timestamp = Timestamp.from(Instant.now())
 ) : Transaction()
 

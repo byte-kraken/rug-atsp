@@ -14,6 +14,6 @@ class ConsoleAbsenteeBallotFiller : AbsenteeBallotFiller {
      */
     override fun signForm(absenteeBallotRequest: AbsenteeBallotRequest) {
         print("\nPlease sign here: ")
-        System.console().readLine()
+        readLine()
     }
 }

@@ -1,6 +1,7 @@
 package observerPattern
 
 import utils.BallotTemplate
+import utils.Token
 import java.util.*
 
 /**
@@ -19,7 +20,7 @@ interface MailService {
      *
      * @param uuid the user id the mail is addressed to
      * @param ballotTemplate the ballot the mail is concerned with
-     * @param hashedToken the secret token string generated for each ballot sent
+     * @param token the secret token string generated for each ballot sent
      */
-    fun sendMail(uuid: UUID, ballotTemplate: BallotTemplate, hashedToken: String)
+    fun sendMail(uuid: UUID, ballotTemplate: BallotTemplate, token: Token)
 }
